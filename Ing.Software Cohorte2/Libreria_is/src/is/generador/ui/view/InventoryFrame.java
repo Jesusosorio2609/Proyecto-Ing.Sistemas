@@ -85,6 +85,7 @@ public final class InventoryFrame extends JFrame {
         configureWindow();
         buildLayout();
         bindActions();
+        exclusionsPanel.setChangeListener(this::saveExclusions);
         analyze(currentSource);
     }
 
@@ -379,6 +380,20 @@ public final class InventoryFrame extends JFrame {
         chooser.setDialogTitle("Seleccionar proyecto o carpeta src");
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             analyze(chooser.getSelectedFile().toPath());
+        }
+    }
+
+    private void saveExclusions(java.util.Set<String> excludedPackages,
+            java.util.Set<String> excludedClasses) {
+        try {
+            service.saveExclusions(currentSource, excludedPackages, excludedClasses);
+            footerLabel.setText("Exclusiones guardadas. Actualizando análisis...");
+            analyze(currentSource);
+        } catch (IOException exception) {
+            JOptionPane.showMessageDialog(this, exception.getMessage(),
+                    "No se pudieron guardar las exclusiones",
+                    JOptionPane.ERROR_MESSAGE);
+            exclusionsPanel.update(currentModel);
         }
     }
 

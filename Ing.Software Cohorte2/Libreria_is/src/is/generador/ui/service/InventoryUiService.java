@@ -5,6 +5,7 @@ import is.generador.ui.model.InventoryViewModel;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -13,6 +14,7 @@ import java.util.Properties;
 import java.util.Set;
 
 public final class InventoryUiService {
+    public static final String AUTOMATIC_EXCLUSION = "com.universidad.AppGenerator";
     private final SoyLaPuertaJava gateway;
 
     public InventoryUiService(SoyLaPuertaJava gateway) {
@@ -32,7 +34,7 @@ public final class InventoryUiService {
                 policies.getProperty("exclude.packages", ""));
         Set<String> excludedClasses = valuesOf(
                 policies.getProperty("exclude.classes", ""));
-        excludedClasses.add("com.universidad.AppGenerator");
+        excludedClasses.add(AUTOMATIC_EXCLUSION);
         return new InventoryViewModel(
                 sourceDirectory,
                 gateway.analyzeProject(sourceDirectory, excludedPackages,
@@ -69,6 +71,50 @@ public final class InventoryUiService {
             }
         }
         return values;
+    }
+
+    public void saveExclusions(Path sourceDirectory, Set<String> excludedPackages,
+            Set<String> excludedClasses) throws IOException {
+        Objects.requireNonNull(sourceDirectory, "sourceDirectory");
+        Objects.requireNonNull(excludedPackages, "excludedPackages");
+        Objects.requireNonNull(excludedClasses, "excludedClasses");
+        Path configurationFile = sourceDirectory.toAbsolutePath().normalize()
+                .getParent().resolve("analisis.properties");
+        Properties properties = loadProperties(configurationFile);
+        updateProperty(properties, "exclude.packages", excludedPackages);
+        Set<String> configurableClasses = new LinkedHashSet<>(excludedClasses);
+        configurableClasses.remove(AUTOMATIC_EXCLUSION);
+        updateProperty(properties, "exclude.classes", configurableClasses);
+
+        Path temporaryFile = Files.createTempFile(configurationFile.getParent(),
+                "analisis-", ".properties.tmp");
+        try {
+            try (var writer = Files.newBufferedWriter(temporaryFile)) {
+                properties.store(writer, "Project analysis configuration");
+            }
+            try {
+                Files.move(temporaryFile, configurationFile,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (java.nio.file.AtomicMoveNotSupportedException exception) {
+                Files.move(temporaryFile, configurationFile,
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporaryFile);
+        }
+    }
+
+    private void updateProperty(Properties properties, String key,
+            Set<String> values) {
+        String normalized = values.stream().map(String::trim)
+                .filter(value -> !value.isEmpty()).distinct().sorted()
+                .reduce((a, b) -> a + "," + b).orElse("");
+        if (normalized.isEmpty()) {
+            properties.remove(key);
+        } else {
+            properties.setProperty(key, normalized);
+        }
     }
 
     public Path resolveSourceDirectory(Path selectedDirectory) throws IOException {
