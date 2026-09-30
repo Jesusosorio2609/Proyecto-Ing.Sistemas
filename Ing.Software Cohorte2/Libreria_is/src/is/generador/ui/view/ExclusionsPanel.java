@@ -23,7 +23,8 @@ import javax.swing.ListSelectionModel;
 final class ExclusionsPanel extends JPanel {
     @FunctionalInterface
     interface ChangeListener {
-        void exclusionsChanged(Set<String> packages, Set<String> classes);
+        void exclusionsChanged(Set<String> packages, Set<String> classes,
+                Set<String> whitelist, Set<String> blacklist);
     }
 
     private final JLabel summary = new JLabel("Sin análisis");
@@ -34,6 +35,12 @@ final class ExclusionsPanel extends JPanel {
     private final DefaultListModel<String> classModel = new DefaultListModel<>();
     private final JList<String> packageList = createList(packageModel);
     private final JList<String> classList = createList(classModel);
+    private final JLabel whitelistTitle = UiTheme.heading("Whitelist (0)");
+    private final JLabel blacklistTitle = UiTheme.heading("Blacklist (0)");
+    private final DefaultListModel<String> whitelistModel = new DefaultListModel<>();
+    private final DefaultListModel<String> blacklistModel = new DefaultListModel<>();
+    private final JList<String> whitelistList = createList(whitelistModel);
+    private final JList<String> blacklistList = createList(blacklistModel);
     private ChangeListener changeListener;
 
     ExclusionsPanel() {
@@ -42,12 +49,16 @@ final class ExclusionsPanel extends JPanel {
         setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         add(createHeader(), BorderLayout.NORTH);
 
-        JPanel lists = new JPanel(new GridLayout(1, 2, 10, 0));
+        JPanel lists = new JPanel(new GridLayout(2, 2, 10, 10));
         lists.setOpaque(false);
-        lists.add(createListCard(packagesTitle, packageList, true,
+        lists.add(createListCard(packagesTitle, packageList, packageModel, "paquete",
                 "Se excluye el paquete y todos sus subpaquetes."));
-        lists.add(createListCard(classesTitle, classList, false,
+        lists.add(createListCard(classesTitle, classList, classModel, "clase",
                 "Acepta el nombre simple o completamente calificado."));
+        lists.add(createListCard(whitelistTitle, whitelistList, whitelistModel,
+                "biblioteca permitida", "Permite tipos externos del paquete o clase indicado."));
+        lists.add(createListCard(blacklistTitle, blacklistList, blacklistModel,
+                "biblioteca bloqueada", "Bloquea el paquete o clase; tiene prioridad sobre whitelist."));
         add(lists, BorderLayout.CENTER);
         add(createHelpCard(), BorderLayout.SOUTH);
     }
@@ -59,6 +70,8 @@ final class ExclusionsPanel extends JPanel {
     void update(InventoryViewModel model) {
         replaceValues(packageModel, model.excludedPackages());
         replaceValues(classModel, model.excludedClasses());
+        replaceValues(whitelistModel, model.whitelistedLibraries());
+        replaceValues(blacklistModel, model.blacklistedLibraries());
         refreshLabels();
         source.setText("Origen: " + model.sourceDirectory().getParent()
                 .resolve("analisis.properties"));
@@ -77,7 +90,7 @@ final class ExclusionsPanel extends JPanel {
     }
 
     private JPanel createListCard(JLabel title, JList<String> list,
-            boolean packages, String description) {
+            DefaultListModel<String> model, String label, String description) {
         JPanel card = UiTheme.card();
         card.setLayout(new BorderLayout(0, 8));
         JPanel heading = new JPanel(new GridLayout(2, 1, 0, 3));
@@ -88,56 +101,54 @@ final class ExclusionsPanel extends JPanel {
         heading.add(hint);
         card.add(heading, BorderLayout.NORTH);
         card.add(new JScrollPane(list), BorderLayout.CENTER);
-        card.add(createActions(list, packages), BorderLayout.SOUTH);
-        card.setMinimumSize(new Dimension(300, 300));
+        card.add(createActions(list, model, label), BorderLayout.SOUTH);
+        card.setMinimumSize(new Dimension(300, 180));
         return card;
     }
 
-    private JPanel createActions(JList<String> list, boolean packages) {
+    private JPanel createActions(JList<String> list, DefaultListModel<String> model, String label) {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 7, 0));
         actions.setOpaque(false);
         JButton remove = new JButton("Quitar selección");
-        JButton add = new JButton(packages ? "Agregar paquete" : "Agregar clase");
-        add.addActionListener(event -> addValue(packages));
-        remove.addActionListener(event -> removeSelected(list, packages));
+        JButton add = new JButton("Agregar " + label);
+        add.addActionListener(event -> addValue(model, label));
+        remove.addActionListener(event -> removeSelected(list, model));
         actions.add(remove);
         actions.add(add);
         return actions;
     }
 
-    private void addValue(boolean packages) {
-        String label = packages ? "paquete" : "clase";
+    private void addValue(DefaultListModel<String> model, String label) {
         String value = JOptionPane.showInputDialog(this,
-                "Nombre del " + label + " que deseas excluir:",
-                "Agregar exclusión", JOptionPane.PLAIN_MESSAGE);
+                "Nombre de " + label + " (paquete o clase):",
+                "Agregar regla", JOptionPane.PLAIN_MESSAGE);
         if (value == null) return;
         String normalized = value.trim();
-        if (normalized.isEmpty() || normalized.contains(" ")) {
+        if (normalized.isEmpty() || !javax.lang.model.SourceVersion.isName(normalized)) {
             JOptionPane.showMessageDialog(this,
                     "Ingresa un nombre Java válido sin espacios.",
                     "Exclusión inválida", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        DefaultListModel<String> model = packages ? packageModel : classModel;
         if (!model.contains(normalized)) model.addElement(normalized);
         notifyChange();
     }
 
-    private void removeSelected(JList<String> list, boolean packages) {
+    private void removeSelected(JList<String> list, DefaultListModel<String> model) {
         String selected = list.getSelectedValue();
         if (selected == null) {
             JOptionPane.showMessageDialog(this, "Selecciona una exclusión primero.",
                     "Sin selección", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        if (InventoryUiService.AUTOMATIC_EXCLUSION.equals(selected)) {
+        if (model == classModel && InventoryUiService.AUTOMATIC_EXCLUSION.equals(selected)) {
             JOptionPane.showMessageDialog(this,
                     "AppGenerator se excluye automáticamente para no inventariar"
                     + " el punto de entrada del propio análisis.",
                     "Exclusión automática", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        (packages ? packageModel : classModel).removeElement(selected);
+        model.removeElement(selected);
         notifyChange();
     }
 
@@ -145,15 +156,18 @@ final class ExclusionsPanel extends JPanel {
         refreshLabels();
         if (changeListener != null) {
             changeListener.exclusionsChanged(valuesOf(packageModel),
-                    valuesOf(classModel));
+                    valuesOf(classModel), valuesOf(whitelistModel), valuesOf(blacklistModel));
         }
     }
 
     private void refreshLabels() {
         packagesTitle.setText("Paquetes excluidos (" + packageModel.size() + ")");
         classesTitle.setText("Clases excluidas (" + classModel.size() + ")");
+        whitelistTitle.setText("Whitelist (" + whitelistModel.size() + ")");
+        blacklistTitle.setText("Blacklist (" + blacklistModel.size() + ")");
         summary.setText((packageModel.size() + classModel.size())
-                + " reglas de exclusión aplicadas al análisis actual");
+                + " exclusiones del proyecto y " + (whitelistModel.size() + blacklistModel.size())
+                + " políticas de bibliotecas");
     }
 
     private void replaceValues(DefaultListModel<String> model, Set<String> values) {
@@ -172,7 +186,7 @@ final class ExclusionsPanel extends JPanel {
     private JPanel createHelpCard() {
         JPanel card = UiTheme.card();
         card.setLayout(new GridLayout(3, 1, 0, 3));
-        card.add(UiTheme.heading("Persistencia de las exclusiones"));
+        card.add(UiTheme.heading("Exclusiones y políticas de bibliotecas"));
         card.add(new JLabel("Los cambios se guardan en analisis.properties."));
         card.add(new JLabel("Después de cada cambio el proyecto se analiza nuevamente."));
         return card;

@@ -75,12 +75,20 @@ public final class InventoryUiService {
 
     public void saveExclusions(Path sourceDirectory, Set<String> excludedPackages,
             Set<String> excludedClasses) throws IOException {
+        saveConfiguration(sourceDirectory, excludedPackages, excludedClasses, null, null);
+    }
+
+    public void saveConfiguration(Path sourceDirectory, Set<String> excludedPackages,
+            Set<String> excludedClasses, Set<String> whitelist,
+            Set<String> blacklist) throws IOException {
         Objects.requireNonNull(sourceDirectory, "sourceDirectory");
         Objects.requireNonNull(excludedPackages, "excludedPackages");
         Objects.requireNonNull(excludedClasses, "excludedClasses");
         Path configurationFile = sourceDirectory.toAbsolutePath().normalize()
                 .getParent().resolve("analisis.properties");
         Properties properties = loadProperties(configurationFile);
+        if (whitelist != null) updateProperty(properties, "libraries.whitelist", whitelist);
+        if (blacklist != null) updateProperty(properties, "libraries.blacklist", blacklist);
         updateProperty(properties, "exclude.packages", excludedPackages);
         Set<String> configurableClasses = new LinkedHashSet<>(excludedClasses);
         configurableClasses.remove(AUTOMATIC_EXCLUSION);

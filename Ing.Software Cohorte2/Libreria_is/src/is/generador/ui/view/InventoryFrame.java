@@ -384,10 +384,12 @@ public final class InventoryFrame extends JFrame {
     }
 
     private void saveExclusions(java.util.Set<String> excludedPackages,
-            java.util.Set<String> excludedClasses) {
+            java.util.Set<String> excludedClasses, java.util.Set<String> whitelist,
+            java.util.Set<String> blacklist) {
         try {
-            service.saveExclusions(currentSource, excludedPackages, excludedClasses);
-            footerLabel.setText("Exclusiones guardadas. Actualizando análisis...");
+            service.saveConfiguration(currentSource, excludedPackages, excludedClasses,
+                    whitelist, blacklist);
+            footerLabel.setText("Exclusiones y políticas guardadas. Actualizando análisis...");
             analyze(currentSource);
         } catch (IOException exception) {
             JOptionPane.showMessageDialog(this, exception.getMessage(),
