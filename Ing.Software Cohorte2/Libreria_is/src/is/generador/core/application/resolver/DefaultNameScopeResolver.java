@@ -31,7 +31,7 @@ public final class DefaultNameScopeResolver implements NameScopeResolver {
         Set<String> candidates = new LinkedHashSet<>();
         candidates.add(sourceClassifier.qualifiedName() + "." + rawName);
         if (!sourceClassifier.namespace().isRoot()) {
-            candidates.add(sourceClassifier.namespace().qualifiedNameOf(rawName));
+            candidates.add(sourceClassifier.namespace().toString() + "." + rawName);
         }
 
         String simpleName = simpleName(rawName);

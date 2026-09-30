@@ -6,6 +6,7 @@ import is.generador.core.domain.relationship.UmlDependency;
 import is.generador.core.domain.relationship.UmlGeneralization;
 import is.generador.core.domain.relationship.UmlNesting;
 import is.generador.core.domain.relationship.UmlRelationship;
+import is.generador.core.domain.relationship.RelationshipSelection;
 import is.generador.core.ports.UmlRenderer;
 import java.util.Comparator;
 import java.util.Objects;
@@ -56,7 +57,7 @@ public final class TextInventoryRenderer implements UmlRenderer {
         } else if (relationship instanceof UmlNesting) {
             kind = "CONTIENE";
         } else if (relationship instanceof UmlAssociation) {
-            kind = "ASOCIA";
+            kind = RelationshipSelection.kind(relationship);
         } else if (relationship instanceof UmlDependency) {
             kind = "DEPENDE_DE";
         } else {
@@ -69,6 +70,6 @@ public final class TextInventoryRenderer implements UmlRenderer {
     private String sortKey(UmlRelationship relationship) {
         return relationship.source().qualifiedName() + "|"
                 + relationship.target().qualifiedName() + "|"
-                + relationship.getClass().getName();
+                + RelationshipSelection.key(relationship);
     }
 }

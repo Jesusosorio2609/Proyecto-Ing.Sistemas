@@ -4,6 +4,7 @@ import is.generador.core.domain.relationship.UmlAssociation;
 import is.generador.core.domain.relationship.UmlDependency;
 import is.generador.core.domain.relationship.UmlGeneralization;
 import is.generador.core.domain.relationship.UmlNesting;
+import is.generador.core.domain.spec.AggregationKind;
 import is.generador.ui.model.InventoryViewModel;
 import is.generador.ui.theme.UiTheme;
 import java.awt.BorderLayout;
@@ -92,7 +93,9 @@ final class SummaryPanel extends JPanel {
                 .count();
         addMetric(panel, "Herencias", inheritance, UiTheme.PRIMARY);
         addMetric(panel, "Implementaciones", implementations, new Color(8, 145, 178));
-        addMetric(panel, "Asociaciones", count(model, UmlAssociation.class), UiTheme.WARNING);
+        addMetric(panel, "Asociaciones", countAssociations(model, AggregationKind.NONE), UiTheme.WARNING);
+        addMetric(panel, "Agregaciones", countAssociations(model, AggregationKind.AGGREGATE), UiTheme.WARNING);
+        addMetric(panel, "Composiciones", countAssociations(model, AggregationKind.COMPOSITE), UiTheme.SUCCESS);
         addMetric(panel, "Dependencias", count(model, UmlDependency.class), new Color(234, 88, 12));
         addMetric(panel, "Anidamientos", count(model, UmlNesting.class), UiTheme.SUCCESS);
         return panel;
@@ -137,6 +140,13 @@ final class SummaryPanel extends JPanel {
 
     private long count(InventoryViewModel model, Class<?> type) {
         return model.umlModel().relationships().stream().filter(type::isInstance).count();
+    }
+
+    private long countAssociations(InventoryViewModel model, AggregationKind kind) {
+        return model.umlModel().relationships().stream()
+                .filter(UmlAssociation.class::isInstance)
+                .map(UmlAssociation.class::cast)
+                .filter(association -> association.aggregationKind() == kind).count();
     }
 
     private void addProgress(JPanel parent, String name, int value,

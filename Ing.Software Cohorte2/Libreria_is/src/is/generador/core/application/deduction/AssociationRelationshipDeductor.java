@@ -25,10 +25,9 @@ public final class AssociationRelationshipDeductor implements RelationshipDeduct
                 scopeResolver.resolveFqn(entry.rawTypeName(), source,
                         entry.contextImports(), registry.availableClassifiers())
                         .flatMap(registry::findClassifier)
-                        .filter(target -> target != source)
                         .ifPresent(target -> registry.registerRelationship(
-                        new UmlAssociation(source, "1", target, "1",
-                                AggregationKind.NONE,
+                        new UmlAssociation(source, "1", target, entry.targetMultiplicity(),
+                                entry.aggregationKind(),
                                 Optional.empty(), Optional.empty()))));
     }
 }

@@ -5,6 +5,8 @@ import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.nodeTypes.NodeWithTypeParameters;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.EnumDeclaration;
 import com.github.javaparser.ast.body.RecordDeclaration;
@@ -18,6 +20,7 @@ import com.github.javaparser.ast.type.WildcardType;
 import is.generador.core.application.context.ResolutionContext;
 import is.generador.core.domain.classifier.UmlClassifier;
 import is.generador.core.domain.element.UmlNamespace;
+import is.generador.core.domain.spec.AggregationKind;
 import is.generador.core.ports.DomainPolicyProvider;
 import is.generador.core.ports.ProjectModelExtractor;
 import java.io.IOException;
@@ -72,6 +75,9 @@ public final class JavaParserProjectModelExtractor implements ProjectModelExtrac
                 extractFile(file, context);
             }
         }
+        List<String> errors = context.diagnosticTracker().getReport().stream()
+                .filter(message -> message.startsWith("ERROR ")).toList();
+        if (!errors.isEmpty()) throw new IOException(String.join(System.lineSeparator(), errors));
         return context.freeze();
     }
 
@@ -171,19 +177,27 @@ public final class JavaParserProjectModelExtractor implements ProjectModelExtrac
             ResolutionContext context) {
         declaration.getMembers().forEach(member -> {
             if (member.isFieldDeclaration()) {
-                member.asFieldDeclaration().getVariables().forEach(variable ->
+                var field = member.asFieldDeclaration();
+                AggregationKind kind = JavaParserAggregationMapper.map(field);
+                if (field.isStatic() && kind != AggregationKind.NONE)
+                    throw new IllegalArgumentException("@Agregacion y @Composicion requieren atributos de instancia.");
+                field.getVariables().forEach(variable ->
                         registerType(variable.getType(), classifier, imports,
-                                context, true));
+                                context, true, kind, "1"));
             } else if (member.isMethodDeclaration()) {
                 var method = member.asMethodDeclaration();
                 registerType(method.getType(), classifier, imports, context, false);
                 method.getParameters().forEach(parameter ->
                         registerType(parameter.getType(), classifier, imports,
                                 context, false));
+                method.getThrownExceptions().forEach(type ->
+                        registerType(type, classifier, imports, context, false));
             } else if (member.isConstructorDeclaration()) {
                 member.asConstructorDeclaration().getParameters().forEach(parameter ->
                         registerType(parameter.getType(), classifier, imports,
                                 context, false));
+                member.asConstructorDeclaration().getThrownExceptions().forEach(type ->
+                        registerType(type, classifier, imports, context, false));
             } else if (member.isAnnotationMemberDeclaration()) {
                 registerType(member.asAnnotationMemberDeclaration().getType(),
                         classifier, imports, context, false);
@@ -192,36 +206,46 @@ public final class JavaParserProjectModelExtractor implements ProjectModelExtrac
         if (declaration instanceof RecordDeclaration record) {
             record.getParameters().forEach(parameter ->
                     registerType(parameter.getType(), classifier, imports,
-                            context, true));
+                            context, true, JavaParserAggregationMapper.map(parameter), "1"));
         }
     }
 
     private void registerType(Type type, UmlClassifier classifier,
             List<String> imports, ResolutionContext context,
             boolean association) {
+        registerType(type, classifier, imports, context, association, AggregationKind.NONE, "1");
+    }
+
+    private void registerType(Type type, UmlClassifier classifier,
+            List<String> imports, ResolutionContext context,
+            boolean association, AggregationKind kind, String multiplicity) {
         if (type.isPrimitiveType() || type.isVoidType() || type.isVarType()) {
             return;
         }
         if (type instanceof ArrayType array) {
             registerType(array.getComponentType(), classifier, imports,
-                    context, association);
+                    context, association, kind, "0..*");
         } else if (type instanceof ClassOrInterfaceType reference) {
+            if (reference.getScope().isEmpty() && isTypeParameter(reference)) return;
             if (association) {
                 context.registerUnresolvedAssociation(classifier.qualifiedName(),
-                        reference.getNameWithScope(), imports);
+                        reference.getNameWithScope(), imports, kind, multiplicity);
             } else {
                 context.registerUnresolvedType(classifier.qualifiedName(),
                         reference.getNameWithScope(), imports);
             }
+            boolean many = Set.of("Collection", "List", "Set", "Iterable", "Queue", "Deque", "Map",
+                    "ArrayList", "LinkedList", "HashSet", "TreeSet", "HashMap", "TreeMap")
+                    .contains(reference.getNameAsString());
             reference.getTypeArguments().ifPresent(arguments ->
                     arguments.forEach(argument ->
                             registerType(argument, classifier, imports,
-                                    context, association)));
+                                    context, association, kind, many ? "0..*" : multiplicity)));
         } else if (type instanceof WildcardType wildcard) {
             wildcard.getExtendedType().ifPresent(bound ->
-                    registerType(bound, classifier, imports, context, association));
+                    registerType(bound, classifier, imports, context, association, kind, multiplicity));
             wildcard.getSuperType().ifPresent(bound ->
-                    registerType(bound, classifier, imports, context, association));
+                    registerType(bound, classifier, imports, context, association, kind, multiplicity));
         } else if (type instanceof UnionType union) {
             union.getElements().forEach(element ->
                     registerType(element, classifier, imports, context, association));
@@ -236,6 +260,16 @@ public final class JavaParserProjectModelExtractor implements ProjectModelExtrac
                 .filter(importDeclaration -> !importDeclaration.isStatic())
                 .map(this::importName)
                 .toList();
+    }
+
+    private boolean isTypeParameter(ClassOrInterfaceType reference) {
+        for (Node node = reference; node != null; node = node.getParentNode().orElse(null)) {
+            if (node instanceof NodeWithTypeParameters<?> generic
+                    && generic.getTypeParameters().stream().anyMatch(parameter ->
+                            parameter.getNameAsString().equals(reference.getNameAsString())))
+                return true;
+        }
+        return false;
     }
 
     private String importName(ImportDeclaration declaration) {

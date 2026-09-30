@@ -222,39 +222,4 @@ public final class ProjectAnalyzer {
                 .map(parent -> ((ClassOrInterfaceDeclaration) parent).isInterface())
                 .orElse(false));
     }
-
-    /** Entry point used by Ant and NetBeans after compiling the consumer project. */
-    public static void main(String[] args) throws IOException {
-        if (args.length != 1) {
-            throw new IllegalArgumentException("Usage: ProjectAnalyzer <source-directory>");
-        }
-
-        Path sourceDirectory = Path.of(args[0]);
-        Builder builder = builder();
-        for (String packageName : System.getProperty("metrics.exclude.packages", "").split(",")) {
-            if (!packageName.isBlank()) {
-                builder.excludePackage(packageName);
-            }
-        }
-        for (String className : System.getProperty("metrics.exclude.classes", "").split(",")) {
-            if (!className.isBlank()) {
-                builder.excludeClass(className);
-            }
-        }
-
-        ProjectAnalyzer analyzer = builder.build();
-        ProjectSummary summary = analyzer.analyze(sourceDirectory);
-        System.out.println("\n========== JAVA PROJECT SUMMARY ==========");
-        System.out.println("Sources: " + sourceDirectory.toAbsolutePath().normalize());
-        if (!analyzer.excludedPackages.isEmpty()) {
-            System.out.println("Excluded packages: " + analyzer.excludedPackages);
-        }
-        if (!analyzer.excludedClasses.isEmpty()) {
-            System.out.println("Excluded classes: " + analyzer.excludedClasses);
-        }
-        System.out.print(summary);
-        System.out.println("Getters and setters are included in Methods.");
-        System.out.println("Only explicit declarations are counted; record components and enum constants are separate.");
-        System.out.println("==========================================\n");
-    }
 }

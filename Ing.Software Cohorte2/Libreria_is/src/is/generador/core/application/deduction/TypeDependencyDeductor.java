@@ -24,7 +24,6 @@ public final class TypeDependencyDeductor implements RelationshipDeductor {
                 scopeResolver.resolveFqn(entry.rawTypeName(), source,
                         entry.contextImports(), registry.availableClassifiers())
                         .flatMap(registry::findClassifier)
-                        .filter(target -> target != source)
                         .ifPresent(target -> registry.registerRelationship(
                         new UmlDependency(source, target,
                                 Optional.empty(), Optional.empty()))));

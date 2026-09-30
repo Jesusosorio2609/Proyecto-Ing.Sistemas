@@ -56,13 +56,13 @@ public final class InventoryFrame extends JFrame {
     private final InventoryUiService service;
     private final SummaryPanel summaryPanel = new SummaryPanel();
     private final DetailPanel detailPanel = new DetailPanel();
+    private final RelationshipsPanel relationshipsPanel = new RelationshipsPanel();
     private final ExclusionsPanel exclusionsPanel = new ExclusionsPanel();
     private final JTabbedPane tabs = new JTabbedPane();
     private final JTextField pathField = new JTextField();
     private final JTextField searchField = new JTextField();
     private final JLabel stateLabel = new JLabel("Listo para analizar");
     private final JLabel footerLabel = new JLabel("Sin análisis");
-    private final JButton analyzeButton = primaryButton("Analizar");
     private final JButton copyButton = new JButton("Copiar reporte");
     private final JButton exportButton = new JButton("Exportar");
     private final DefaultMutableTreeNode treeRoot =
@@ -102,9 +102,8 @@ public final class InventoryFrame extends JFrame {
 
         tabs.addTab("Resumen", summaryPanel);
         tabs.addTab("Estructura", createStructurePanel());
-        tabs.addTab("Relaciones", createRelationshipsPlaceholder());
+        tabs.addTab("Relaciones", relationshipsPanel);
         tabs.addTab("Detalle", detailPanel);
-        tabs.addTab("Diagnósticos", createDiagnosticsPanel());
         tabs.addTab("Exclusiones", exclusionsPanel);
         tabs.setBorder(BorderFactory.createEmptyBorder());
 
@@ -141,11 +140,7 @@ public final class InventoryFrame extends JFrame {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actions.setOpaque(false);
         stateLabel.setForeground(UiTheme.SUCCESS);
-        JButton selectButton = new JButton("Seleccionar proyecto");
-        selectButton.setActionCommand("selectProject");
         actions.add(stateLabel);
-        actions.add(selectButton);
-        actions.add(analyzeButton);
         topBar.add(actions, BorderLayout.EAST);
         return topBar;
     }
@@ -224,8 +219,8 @@ public final class InventoryFrame extends JFrame {
         footer.add(footerLabel, BorderLayout.WEST);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 7, 0));
         actions.setOpaque(false);
-        JButton diagramButton = new JButton("Guardar diagrama · Próximamente");
-        diagramButton.setEnabled(false);
+        JButton diagramButton = new JButton("Guardar PUML");
+        diagramButton.addActionListener(event -> exportPuml());
         actions.add(copyButton);
         actions.add(exportButton);
         actions.add(diagramButton);
@@ -234,8 +229,6 @@ public final class InventoryFrame extends JFrame {
     }
 
     private void bindActions() {
-        analyzeButton.addActionListener(event -> analyze(currentSource));
-        findButton(this, "selectProject").addActionListener(event -> selectProject());
         copyButton.addActionListener(event -> copyReport());
         exportButton.addActionListener(event -> exportReport());
         searchField.getDocument().addDocumentListener(new DocumentListener() {
@@ -285,6 +278,7 @@ public final class InventoryFrame extends JFrame {
     private void refreshDashboard() {
         pathField.setText(currentSource.toString());
         summaryPanel.update(currentModel);
+        relationshipsPanel.update(currentModel.umlModel());
         detailPanel.setModel(currentModel);
         exclusionsPanel.update(currentModel);
         rebuildTree();
@@ -399,6 +393,45 @@ public final class InventoryFrame extends JFrame {
         }
     }
 
+    private void exportPuml() {
+        if (currentModel == null) {
+            JOptionPane.showMessageDialog(this, "Espera a que termine el análisis.",
+                    "Guardar PUML", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        java.awt.FileDialog chooser = new java.awt.FileDialog(this,
+                "Guardar diagrama PlantUML", java.awt.FileDialog.SAVE);
+        chooser.setDirectory(javax.swing.filechooser.FileSystemView.getFileSystemView()
+                .getHomeDirectory().getAbsolutePath());
+        chooser.setFile("diagrama-proyecto.puml");
+        String selectedFile;
+        String selectedDirectory;
+        try {
+            chooser.setVisible(true);
+            selectedFile = chooser.getFile();
+            selectedDirectory = chooser.getDirectory();
+        } finally {
+            chooser.dispose();
+        }
+        if (selectedFile == null || selectedDirectory == null) return;
+        Path target = Path.of(selectedDirectory).resolve(selectedFile).toAbsolutePath().normalize();
+        if (!target.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".puml"))
+            target = target.resolveSibling(target.getFileName() + ".puml");
+        if (Files.exists(target) && JOptionPane.showConfirmDialog(this,
+                "El archivo ya existe. ¿Deseas reemplazarlo?", "Guardar PUML",
+                JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+        try {
+            new is.generador.SoyLaPuertaJava().guardarPuml(currentModel.umlModel(), target);
+            if (!Files.isRegularFile(target) || Files.size(target) == 0)
+                throw new IOException("No se creó el archivo PUML: " + target);
+            footerLabel.setText("PUML guardado: " + target);
+            JOptionPane.showMessageDialog(this, "Archivo guardado en:\n" + target,
+                    "PUML guardado", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IOException | RuntimeException exception) {
+            JOptionPane.showMessageDialog(this, exception.getMessage(),
+                    "No se pudo guardar el PUML", JOptionPane.ERROR_MESSAGE);
+        }
+    }
     private void copyReport() {
         if (currentModel == null) return;
         Toolkit.getDefaultToolkit().getSystemClipboard().setContents(
@@ -421,7 +454,6 @@ public final class InventoryFrame extends JFrame {
     }
 
     private void setBusy(boolean busy, String state) {
-        analyzeButton.setEnabled(!busy);
         stateLabel.setText(state);
         stateLabel.setForeground(busy ? UiTheme.WARNING : UiTheme.SUCCESS);
     }

@@ -30,6 +30,47 @@ import java.util.stream.Stream;
 
 public class SoyLaPuertaJava {
 
+    /** Fase 3: genera PUML a partir del modelo ya analizado. */
+    public String generarPuml(UmlModel model) {
+        return diagramService().generate(model);
+    }
+
+    /** Guarda el PUML del modelo actual sin repetir el análisis. */
+    public void guardarPuml(UmlModel model, Path destino) {
+        diagramService().write(model, destino);
+    }
+
+    /** Fases 1, 2 y 3, respetando analisis.properties del proyecto. */
+    public String generarPuml(Path directorio) throws IOException {
+        Path fuentes = directorio.toAbsolutePath().normalize();
+        if (Files.isDirectory(fuentes.resolve("src"))) fuentes = fuentes.resolve("src");
+        Path configuracion = fuentes.getParent().resolve("analisis.properties");
+        Properties properties = new Properties();
+        if (Files.isRegularFile(configuracion)) {
+            try (var reader = Files.newBufferedReader(configuracion)) { properties.load(reader); }
+        }
+        Set<String> paquetes = configurationValues(properties.getProperty("exclude.packages", ""));
+        Set<String> clases = configurationValues(properties.getProperty("exclude.classes", ""));
+        clases.add("com.universidad.AppGenerator");
+        return generarPuml(analyzeModel(fuentes, configuracion, paquetes, clases));
+    }
+
+    /** Genera y guarda el PUML desde la carpeta de fuentes o raíz del proyecto. */
+    public void guardarPuml(Path directorio, Path destino) throws IOException {
+        new is.generador.infra.puml.FileDiagramWriter().write(generarPuml(directorio), destino);
+    }
+
+    private is.generador.core.application.ProjectDiagramService diagramService() {
+        return new is.generador.core.application.ProjectDiagramService(
+                new is.generador.infra.puml.PlantUmlRenderer(),
+                new is.generador.infra.puml.FileDiagramWriter());
+    }
+
+    private Set<String> configurationValues(String text) {
+        Set<String> result = new LinkedHashSet<>();
+        for (String value : text.split(",")) if (!value.isBlank()) result.add(value.trim());
+        return result;
+    }
     /** Returns the source-code metrics for a project. */
     public ProjectSummary analyzeProject(Path sourceDirectory) throws IOException {
         return new ProjectAnalyzer().analyze(sourceDirectory);

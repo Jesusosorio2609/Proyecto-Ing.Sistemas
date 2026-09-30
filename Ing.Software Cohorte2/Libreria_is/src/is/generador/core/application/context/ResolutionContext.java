@@ -13,6 +13,7 @@ import is.generador.core.ports.DomainPolicyProvider;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import is.generador.core.domain.spec.AggregationKind;
 
 public final class ResolutionContext {
 
@@ -87,6 +88,14 @@ public final class ResolutionContext {
         checkNotFrozen("register unresolved hierarchy");
         extractionSnapshot.unresolvedTypes().registerHierarchy(
                 sourceClassifierFqn, rawAncestorName, contextImports);
+    }
+
+    public void registerUnresolvedAssociation(String sourceClassifierFqn,
+            String rawTypeName, List<String> contextImports,
+            AggregationKind kind, String multiplicity) {
+        checkNotFrozen("register unresolved association");
+        extractionSnapshot.unresolvedTypes().registerAssociation(
+                sourceClassifierFqn, rawTypeName, contextImports, kind, multiplicity);
     }
 
     public void registerUnresolvedHierarchy(String sourceClassifierFqn,

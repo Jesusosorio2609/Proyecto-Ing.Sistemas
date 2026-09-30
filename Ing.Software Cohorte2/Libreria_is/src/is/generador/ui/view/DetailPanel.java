@@ -3,6 +3,7 @@ package is.generador.ui.view;
 import is.generador.core.domain.classifier.UmlClassifier;
 import is.generador.core.domain.relationship.UmlGeneralization;
 import is.generador.core.domain.relationship.UmlRelationship;
+import is.generador.core.domain.relationship.RelationshipSelection;
 import is.generador.ui.model.ClassifierFileDetails;
 import is.generador.ui.model.InventoryViewModel;
 import is.generador.ui.theme.UiTheme;
@@ -144,9 +145,7 @@ final class DetailPanel extends JPanel {
         String direction = relationship.source() == classifier ? "→ " : "← ";
         UmlClassifier other = relationship.source() == classifier
                 ? relationship.target() : relationship.source();
-        String kind = relationship instanceof UmlGeneralization generalization
-                ? (generalization.isInterfaceImplementation() ? "IMPLEMENTA" : "HEREDA")
-                : relationship.getClass().getSimpleName().replace("Uml", "").toUpperCase();
+        String kind = RelationshipSelection.kind(relationship);
         return direction + kind + "  " + other.qualifiedName();
     }
 

@@ -103,7 +103,7 @@ final class JavaParserClassifierMapper {
                                 typeMapper.map(variable.getType(), templateParameters),
                                 JavaParserSpecMapper.toPropertyModifiers(field),
                                 variable.getInitializer().map(Object::toString),
-                                Optional.<AggregationKind>empty())));
+                                Optional.of(JavaParserAggregationMapper.map(field)))));
             }
         }
         if (declaration instanceof RecordDeclaration record) {
@@ -114,7 +114,7 @@ final class JavaParserClassifierMapper {
                             typeMapper.map(parameter.getType(), templateParameters),
                             Set.of(UmlModifier.READ_ONLY),
                             Optional.empty(),
-                            Optional.empty())));
+                            Optional.of(JavaParserAggregationMapper.map(parameter)))));
         }
         if (declaration instanceof EnumDeclaration enumeration) {
             enumeration.getEntries().forEach(entry -> properties.add(

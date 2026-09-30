@@ -2,6 +2,7 @@ package is.generador.core.application.registry;
 
 import is.generador.core.domain.classifier.UmlClassifier;
 import is.generador.core.domain.relationship.UmlRelationship;
+import is.generador.core.domain.relationship.RelationshipSelection;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -29,7 +30,7 @@ public final class ResolutionRegistryImpl implements ResolutionRegistry {
         rawAttempts.add(Objects.requireNonNull(relationship, "relationship"));
     }
     @Override public Collection<UmlRelationship> resolvedRelationships() {
-        return List.copyOf(computeWinners().values());
+        return RelationshipSelection.distinct(rawAttempts);
     }
 
     @Override public List<DeductionEvent> deductionEvents() {
@@ -45,9 +46,9 @@ public final class ResolutionRegistryImpl implements ResolutionRegistry {
 
     private Map<String, UmlRelationship> computeWinners() {
         Map<String, UmlRelationship> winners = new LinkedHashMap<>();
-        for (var candidate : rawAttempts) {
+        for (var candidate : RelationshipSelection.strongest(rawAttempts)) {
             winners.merge(buildKey(candidate), candidate, (current, replacement) ->
-                    replacement.semanticWeight().isStrongerThan(current.semanticWeight())
+                    RelationshipSelection.priority(replacement) > RelationshipSelection.priority(current)
                             ? replacement : current);
         }
         return winners;
