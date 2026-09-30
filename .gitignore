@@ -1,0 +1,11 @@
+# Java and NetBeans generated output
+**/build/
+**/dist/
+**/nbproject/private/
+*.class
+*.log
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+desktop.ini
