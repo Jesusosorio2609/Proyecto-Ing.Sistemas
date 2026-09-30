@@ -11,6 +11,11 @@ public final class InventoryApplication {
     private InventoryApplication() {
     }
 
+    /** Starts the centralized project inventory application. */
+    public static void main(String[] arguments) {
+        show(new SoyLaPuertaJava(), arguments);
+    }
+
     public static void show(SoyLaPuertaJava gateway, String[] arguments) {
         Path initialSource = InventoryUiService.sourceFrom(arguments);
         SwingUtilities.invokeLater(() -> {
